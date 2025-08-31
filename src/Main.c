@@ -25,9 +25,9 @@ void NeuralNetwork_Render(NeuralNetwork* nn){
         
         for(int j = 0;j<nl->count;j++){
             const int x = i * 300.0f;
-            const int y = j * 120.0f;
+            const int y = j * font.CharSizeY * 3;
 
-            RenderRect(x,y,100.0f,100.0f,GREEN);
+            RenderRect(x,y,100.0f,font.CharSizeY * 2,GREEN);
             
             String str = String_Format("%f",nl->values[j]);
             RenderCStrSizeAlxFont(&font,str.Memory,str.size,x,y,GRAY);
@@ -37,16 +37,14 @@ void NeuralNetwork_Render(NeuralNetwork* nn){
             RenderCStrSizeAlxFont(&font,str.Memory,str.size,x,y + font.CharSizeY,GRAY);
             String_Free(&str);
         
-            str = String_Format("%f",nl->dbiases[j]);
-            RenderCStrSizeAlxFont(&font,str.Memory,str.size,x,y + 2 * font.CharSizeY,GRAY);
-            String_Free(&str);
-        
             const int max = 3;
             const int count = nl->precount < max ? nl->precount : max;
             for(int k = 0;k<nl->precount;k++){
-                str = String_Format("%f",nl->weights[j][k]);
-                RenderCStrSizeAlxFont(&font,str.Memory,str.size,x + 150,y + i * font.CharSizeY,GRAY);
-                String_Free(&str);
+                if(nl->weights && nl->weights[j]){
+                    str = String_Format("%f",nl->weights[j][k]);
+                    RenderCStrSizeAlxFont(&font,str.Memory,str.size,x - 150,y + k * font.CharSizeY,GRAY);
+                    String_Free(&str);
+                }
             }
         }
     }
@@ -85,13 +83,13 @@ void Setup(AlxWindow* w){
     nnet = NeuralNetwork_New((unsigned int[]){ 784,2,10,0 });
 
     NeuralDataMap ndm = NeuralDataMap_Make_GSprite(DATA_PATH SPRITE_TRAINING);
-    //NeuralNetwork_Learn(&nnet,&ndm,NN_LEARNRATE);
+    NeuralNetwork_Learn(&nnet,&ndm,NN_LEARNRATE);
     NeuralDataMap_Free(&ndm);
 }
 void Update(AlxWindow* w){
     if(Stroke(ALX_KEY_W).PRESSED){
-        int ndir = Random_i32_MinMax(0,10);
-        int item = Random_i32_MinMax(0,10);
+        unsigned int ndir = Random_u32_MinMax(0,10);
+        unsigned int item = Random_u32_MinMax(0,10);
 
         NeuralDataPair ndp = NeuralDataPair_Make_GSprite(DATA_PATH SPRITE_TEST,ndir,item);
         loss = NeuralNetwork_Test(&nnet,&ndp);
@@ -112,13 +110,13 @@ void Update(AlxWindow* w){
     //String_Free(&str);
 
     String str = String_Format("Loss: %f, Is: %d, Pre: %d, -> %s",loss,reality,prediction,(reality == prediction ? "correct" : "wrong"));
-    RenderCStrSize(str.Memory,str.size,0.0f,GetAlxFont()->CharSizeY,WHITE);
+    RenderCStrSize(str.Memory,str.size,0.0f,GetHeight() - GetAlxFont()->CharSizeY,WHITE);
     String_Free(&str);
 }
 void Delete(AlxWindow* w){
+    NeuralNetwork_Free(&nnet);
     GSprite_Free(&sp);
     AlxFont_Free(&font);
-    NeuralNetwork_Free(&nnet);
 }
 
 int main(){
