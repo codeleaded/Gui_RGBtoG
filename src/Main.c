@@ -10,7 +10,7 @@
 #define SPRITE_MAX          300
 
 #define NN_COUNT            10
-#define NN_LEARNRATE        0.05f
+#define NN_LEARNRATE        0.5f
 
 int epoch = 0;
 int reality = 0;
@@ -86,7 +86,7 @@ void Setup(AlxWindow* w){
 
     sp = GSprite_None();
     font = AlxFont_MAKE_HIGH(12,24);
-    nnet = NeuralNetwork_New((unsigned int[]){ 784,10,0 });
+    nnet = NeuralNetwork_New((unsigned int[]){ 784,16,10,0 });
 }
 void Update(AlxWindow* w){
     if(Stroke(ALX_KEY_W).PRESSED){
