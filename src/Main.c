@@ -9,6 +9,7 @@
 #define SPRITE_COUNT        1
 #define SPRITE_MAX          300
 
+#define NN_PATH             "./data/Model.nnalx"
 #define NN_COUNT            10
 #define NN_LEARNRATE        0.5f
 
@@ -86,7 +87,11 @@ void Setup(AlxWindow* w){
 
     sp = GSprite_None();
     font = AlxFont_MAKE_HIGH(12,24);
-    nnet = NeuralNetwork_New((unsigned int[]){ 784,16,10,0 });
+    
+    if(Files_isFile(NN_PATH))
+        nnet = NeuralNetwork_Load(NN_PATH);
+    else
+        nnet = NeuralNetwork_Make((unsigned int[]){ 784,16,10,0 });
 }
 void Update(AlxWindow* w){
     if(Stroke(ALX_KEY_W).PRESSED){
@@ -113,6 +118,20 @@ void Update(AlxWindow* w){
         GSprite_Free(&sp);
         sp = GSprite_Load(ntraining_s);
         CStr_Free(&ntraining_s);
+    }
+    if(Stroke(ALX_KEY_Q).PRESSED){
+        NeuralNetwork_Save(&nnet,NN_PATH);
+        printf("[NeuralNetwork]: Save -> Success!\n");
+    }
+    if(Stroke(ALX_KEY_E).PRESSED){
+        NeuralNetwork_Free(&nnet);
+        if(Files_isFile(NN_PATH)){
+            nnet = NeuralNetwork_Load(NN_PATH);
+            printf("[NeuralNetwork]: Load -> Success!\n");
+        }else{
+            nnet = NeuralNetwork_Make((unsigned int[]){ 784,16,10,0 });
+            printf("[NeuralNetwork]: Load -> Failed!\n");
+        }
     }
 
     Clear(DARK_BLUE);
