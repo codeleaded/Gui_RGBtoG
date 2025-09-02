@@ -1,161 +1,126 @@
 #include "/home/codeleaded/System/Static/Library/WindowEngine1.0.h"
 #include "/home/codeleaded/System/Static/Library/GSprite.h"
 #include "/home/codeleaded/System/Static/Library/NeuralNetwork.h"
+#include "/home/codeleaded/System/Static/Library/AffineTransform.h"
 
 #define SPRITE_PATH         "/home/codeleaded/Data/NN/Digits/"
 #define DATA_PATH           "/home/codeleaded/Data/NN/DigitsGray/"
 #define SPRITE_TEST         "testing"
 #define SPRITE_TRAINING     "training"
 #define SPRITE_COUNT        1
-#define SPRITE_MAX          300
+#define SPRITE_MAX          5000
 
 #define NN_PATH             "./data/Model.nnalx"
 #define NN_COUNT            10
 #define NN_LEARNRATE        0.5f
 
-int epoch = 0;
-int reality = 0;
-int prediction = 0;
-NeuralType loss = 0.0f;
+unsigned int ndir = 0U;
+unsigned int item = 0U;
 GSprite sp;
-AlxFont font;
-NeuralNetwork nnet;
 
-void NeuralNetwork_Render(NeuralNetwork* nn){
-    for(int i = 0;i<nn->layers.size;i++){
-        NeuralLayer* nl = (NeuralLayer*)Vector_Get(&nn->layers,i);
-        
-        for(int j = 0;j<nl->count;j++){
-            const int dx = 400.0f;
-            const int x = i * dx;
-            const int y = j * font.CharSizeY * 3;
-
-            RenderRect(x,y,100.0f,font.CharSizeY * 2,GREEN);
-            
-            String str = String_Format("%f",nl->values[j]);
-            RenderCStrSizeAlxFont(&font,str.Memory,str.size,x,y,GRAY);
-            String_Free(&str);
-        
-            str = String_Format("%f",nl->biases[j]);
-            RenderCStrSizeAlxFont(&font,str.Memory,str.size,x,y + font.CharSizeY,GRAY);
-            String_Free(&str);
-        
-            const int max = 3;
-            const int count = nl->precount < max ? nl->precount : max;
-            for(int k = 0;k<count;k++){
-                if(nl->weights && nl->weights[j]){
-                    str = String_Format("%f",nl->weights[j][k]);
-                    RenderCStrSizeAlxFont(&font,str.Memory,str.size,x - dx * 0.5f,y + k * font.CharSizeY,GRAY);
-                    String_Free(&str);
-                }
-            }
-        }
-    }
-}
-
-NeuralDataPair NeuralDataPair_Make_GSprite(char* path,int number,int item){
-    CStr ntraining_s = CStr_Format("%s/%d/%d.sprg",path,number,item);
-    GSprite sp = GSprite_Load(ntraining_s);
-    CStr_Free(&ntraining_s);
+GSprite GSprite_New_Transformed(GSprite* sp,float x,float y,float s,float a){
+    AffineTransform transform = AffineTransform_New();
+    AffineTransform_Identity(&transform);
     
-    NeuralType outs[NN_COUNT];
-    memset(outs,0,sizeof(outs));
-    outs[number] = 1.0f;
+    AffineTransform_Trans(&transform,(Vec2){ -(float)sp->w * 0.5f,-(float)sp->h * 0.5f });
+    AffineTransform_RotateZ(&transform,a);
+    AffineTransform_Trans(&transform,(Vec2){ (float)sp->w * 0.5f,(float)sp->h * 0.5f });
 
-    NeuralDataPair ndp = NeuralDataPair_New(sp.img,outs,sp.w * sp.h,NN_COUNT);
-    GSprite_Free(&sp);
+    AffineTransform_Trans(&transform,(Vec2){ x,y });
+    AffineTransform_Scale(&transform,(Vec2){ s,s });
 
-    return ndp;
-}
-NeuralDataMap NeuralDataMap_Make_GSprite(char* path){
-    NeuralDataMap ndm = NeuralDataMap_New();
-    for(int i = 0;i<10;i++){
-        for(int j = 0;j<SPRITE_COUNT;j++){
-            NeuralDataPair ndp = NeuralDataPair_Make_GSprite(path,i,epoch + j);
-            Vector_Push(&ndm,&ndp);
+    AffineTransform_Inverse(&transform);
+    
+    GSprite transformed = GSprite_New(sp->w,sp->h);
+    memset(transformed.img,0,sizeof(float) * transformed.w * transformed.h);
+    
+    for(int i = 0;i<transformed.h;i++){
+        for(int j = 0;j<transformed.w;j++){
+            const Vec2 rp = { j,i };
+            const Vec2 p = AffineTransform_Calc(&transform,rp);
+            const float l = GSprite_Get(sp,p.x,p.y);
+            if(l>=0.0f) transformed.img[i * transformed.w + j] = l;
         }
     }
-    epoch += SPRITE_COUNT;
-    if(epoch + SPRITE_COUNT > SPRITE_MAX){
-        epoch = 0;
+
+    return transformed;
+}
+
+void Crawler_Build(char* path){
+    for(int i = 0;i<NN_COUNT;i++){
+        for(int j = 0;j<SPRITE_MAX;j++){
+            CStr filename = CStr_Format("%s/%d/%d.sprg",path,i,j);
+            if(!Files_isFile(filename)){
+                unsigned int item = Random_u32_MinMax(0,j);
+
+                CStr randfilename = CStr_Format("%s/%d/%d.sprg",path,i,item);
+                GSprite sp = GSprite_Load(randfilename);
+
+                const float x = (float)Random_f64_MinMax(-(double)sp.w * 0.05,(double)sp.w * 0.05);
+                const float y = (float)Random_f64_MinMax(-(double)sp.h * 0.05,(double)sp.h * 0.05);
+                const float s = (float)Random_f64_MinMax(0.75,1.25);
+                const float a = (float)Random_f64_MinMax(-F64_PI025,F64_PI025);
+                GSprite trans = GSprite_New_Transformed(&sp,x,y,s,a);
+                GSprite_Save(&trans,filename);
+                GSprite_Free(&trans);
+
+                GSprite_Free(&sp);
+                CStr_Free(&randfilename);
+            }else{
+                // Deleting new files
+                //if(j >= 300) Files_Remove(filename);
+            }
+            CStr_Free(&filename);
+        }
     }
-    return ndm;
 }
 
 void Setup(AlxWindow* w){
     RGA_Set(Time_Nano());
 
-    sp = GSprite_None();
-    font = AlxFont_MAKE_HIGH(12,24);
-    
-    if(Files_isFile(NN_PATH))
-        nnet = NeuralNetwork_Load(NN_PATH);
-    else
-        nnet = NeuralNetwork_Make((unsigned int[]){ 784,16,10,0 });
+    ResizeAlxFont(8,8);
+
+    Crawler_Build(DATA_PATH SPRITE_TRAINING);
+    Crawler_Build(DATA_PATH SPRITE_TEST);
 }
 void Update(AlxWindow* w){
-    if(Stroke(ALX_KEY_W).PRESSED){
-        NeuralDataMap ndm = NeuralDataMap_Make_GSprite(DATA_PATH SPRITE_TRAINING);
-        NeuralNetwork_Learn(&nnet,&ndm,NN_LEARNRATE);
-        NeuralDataMap_Free(&ndm);
+    if(Stroke(ALX_KEY_R).PRESSED){
+        ndir = Random_u32_MinMax(0,10);
+        item = Random_u32_MinMax(0,SPRITE_MAX);
 
-        ndm = NeuralDataMap_Make_GSprite(DATA_PATH SPRITE_TEST);
-        loss = NeuralNetwork_Test_C(&nnet,&ndm);
-        NeuralDataMap_Free(&ndm);
+        CStr ntraining_s = CStr_Format("%s/%d/%d.sprg",DATA_PATH SPRITE_TRAINING,ndir,item);
+        GSprite_Free(&sp);
+        sp = GSprite_Load(ntraining_s);
+        CStr_Free(&ntraining_s);
     }
-    if(Stroke(ALX_KEY_S).PRESSED){
-        unsigned int ndir = Random_u32_MinMax(0,10);
-        unsigned int item = Random_u32_MinMax(0,10);
-
-        NeuralDataPair ndp = NeuralDataPair_Make_GSprite(DATA_PATH SPRITE_TEST,ndir,item);
-        loss = NeuralNetwork_Test(&nnet,&ndp);
-        NeuralDataPair_Free(&ndp);
-
-        prediction = NeuralNetwork_Decision(&nnet);
-        reality = ndir;
+    if(Stroke(ALX_KEY_T).PRESSED){
+        ndir = Random_u32_MinMax(0,10);
+        item = Random_u32_MinMax(0,SPRITE_MAX);
 
         CStr ntraining_s = CStr_Format("%s/%d/%d.sprg",DATA_PATH SPRITE_TEST,ndir,item);
         GSprite_Free(&sp);
         sp = GSprite_Load(ntraining_s);
         CStr_Free(&ntraining_s);
     }
-    if(Stroke(ALX_KEY_Q).PRESSED){
-        NeuralNetwork_Save(&nnet,NN_PATH);
-        printf("[NeuralNetwork]: Save -> Success!\n");
-    }
-    if(Stroke(ALX_KEY_E).PRESSED){
-        NeuralNetwork_Free(&nnet);
-        if(Files_isFile(NN_PATH)){
-            nnet = NeuralNetwork_Load(NN_PATH);
-            printf("[NeuralNetwork]: Load -> Success!\n");
-        }else{
-            nnet = NeuralNetwork_Make((unsigned int[]){ 784,16,10,0 });
-            printf("[NeuralNetwork]: Load -> Failed!\n");
-        }
-    }
-
+    
     Clear(DARK_BLUE);
 
-    GSprite_Render(WINDOW_STD_ARGS,&sp,GetWidth() - sp.w - 50.0f,0.0f);
-
-    NeuralNetwork_Render(&nnet);
+    GSprite_Render(WINDOW_STD_ARGS,&sp,10.0f,10.0f);
 
     //String str = String_Format("T:%d, ND:%d, I:%d",test,ndir,item);
     //RenderCStrSize(str.Memory,str.size,0.0f,0.0f,WHITE);
     //String_Free(&str);
 
-    String str = String_Format("Loss: %f, Is: %d, Pre: %d, -> %s",loss,reality,prediction,(reality == prediction ? "correct" : "wrong"));
+    String str = String_Format("N: %u, I: %u",ndir,item);
     RenderCStrSize(str.Memory,str.size,0.0f,GetHeight() - GetAlxFont()->CharSizeY,WHITE);
     String_Free(&str);
 }
 void Delete(AlxWindow* w){
-    NeuralNetwork_Free(&nnet);
     GSprite_Free(&sp);
-    AlxFont_Free(&font);
 }
 
 int main(){
-    if(Create("RGB to G",1920,1080,1,1,Setup,Update,Delete))
+    if(Create("RGB to G",160,120,8,8,Setup,Update,Delete))
         Start();
     return 0;
 }
